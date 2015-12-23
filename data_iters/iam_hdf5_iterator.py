@@ -5,6 +5,10 @@ from collections import defaultdict
 from minibatcher import MiniBatcher
 
 class IAM_MiniBatcher:
+    """ Iterator interface for generating minibatches from 
+    'author-line' style HDF5 sets of IAM data
+    """
+    
     @staticmethod
     def shingle_item_getter(f, key, shingle_dim=(120,120), use_form=False):
         '''
