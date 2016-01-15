@@ -1,5 +1,5 @@
+import logging
 import h5py
-import random
 import numpy as np
 from collections import defaultdict
 from minibatcher import MiniBatcher
@@ -10,39 +10,49 @@ class IAM_MiniBatcher:
     """
     
     @staticmethod
-    def shingle_item_getter(f, key, shingle_dim=(120,120), use_form=False):
+    def shingle_item_getter(f, key, shingle_dim=(120,120)):
+
         '''
         Retrieve a line from an iam hdf5 file and shingle into the line
+        NB: shingle_dim is in rows, cols format
         '''
 
-        if use_form:
-            # Key format is {author:{form:data}}
-            #print key
-            (author, form) = key
-            # Extract line from HDF5 file
-            original_line = f[author][form]
-        else:
-            # Key format is {author:{form:{line:data}}
-            #print key
-            (author, form, line) = key
-            # Extract line from HDF5 file
-            original_line = f[author][form][line]
+        # Key format is {author:{form:data}}
+        (author, form) = key
+        # Extract line from HDF5 file
+        original_line = f[author][form]
+        # There was an option to index into form. That
+        # format is deprecated. It originally had a hierarchy
+        #      Key format is {author:{form:{line:data}}
+        # and the code was:
+        #      (author, form, line) = key
+        #      original_line = f[author][form][line]
 
         # Pull shingle from the line
+        # TODO: pull out shingle_dim[n] into two holder variables
         (height, width) = original_line.shape
-        max_x = max(width - shingle_dim[1], 0)
-        max_y = max(height - shingle_dim[0], 0)
-        x_start = random.randint(0, max_x)
-        y_start = random.randint(0, max_y)
-        if width < shingle_dim[1] or height < shingle_dim[0]: # The line is too small in at least one access
-            output_arr = np.zeros(shingle_dim)
-            output_arr.fill(255)
-            output_arr[:height,:width] = original_line[:min(height, shingle_dim[0]), :min(width, shingle_dim[1])]
-            return output_arr
+        max_x = max(width - shingle_dim[1], 1)
+        max_y = max(height - shingle_dim[0], 1)
+        x_start = np.random.randint(0, max_x)
+        y_start = np.random.randint(0, max_y)
+        # check if the line is too small on at least one axis
+        if width < shingle_dim[1]:
+            x_slice = slice(0,width)
         else:
-            return original_line[y_start:y_start+ shingle_dim[0], x_start:x_start+shingle_dim[1]]
+            x_slice = slice(x_start, x_start+shingle_dim[1])
+        if  height < shingle_dim[0]: 
+            y_slice = slice(0,height)
+        else:
+            y_slice = slice(y_start, y_start+shingle_dim[1])
+        slice_width = x_slice.stop - x_slice.start
+        slice_height = y_slice.stop - y_slice.start
+        # create an output shingle, copy our thing onto it
+        output_arr = np.zeros(shingle_dim)
+        output_arr.fill(255)
+        output_arr[:slice_height,:slice_width] = original_line[y_slice, x_slice]
+        return output_arr
 
-    def __init__(self, fname, num_authors, num_forms_per_author, use_form=False, default_mode=MiniBatcher.TRAIN, shingle_dim=(120,120), batch_size=32):
+    def __init__(self, fname, num_authors, num_forms_per_author, default_mode=MiniBatcher.TRAIN, shingle_dim=(120,120), batch_size=32, train_pct=.7, test_pct=.2, val_pct=.1):
         self.hdf5_file = fname
 
         fIn = h5py.File(self.hdf5_file, 'r')
@@ -62,27 +72,21 @@ class IAM_MiniBatcher:
         for author in authors[:num_authors]: # Limit us to num_authors
             forms = list(fIn[author])
             for form in forms[:num_forms_per_author]: # Limit us to num_form_per_author
-                if use_form:
-                    keys.append((author, form))
-                else:
-                    for line_name in fIn[author][form].keys():
-                        for shingle in range(fIn[author][form][line_name].shape[0]):
-                            keys.append((author,form,line_name))
+                keys.append((author, form))
+                # Original hierarchy with "use_form" option:
+                # for line_name in fIn[author][form].keys():
+                #     for shingle in range(fIn[author][form][line_name].shape[0]):
+                #         keys.append((author,form,line_name))
 
         # Remove duplicates to prevent test/val contamination
         keys = list(set(keys))
 
-        if use_form:
-            expected_num_of_lines_per_form = 1
-        else:
-            expected_num_of_lines_per_form = 7
-
         normalize = lambda x: 1.0 - x.astype(np.float32)/255.0
 
-        item_getter = lambda f, key: IAM_MiniBatcher.shingle_item_getter(f, key, shingle_dim, use_form)
+        item_getter = lambda f, key: IAM_MiniBatcher.shingle_item_getter(f, key, shingle_dim)
         self.batch_size = batch_size
         m = MiniBatcher(fIn, keys,item_getter=item_getter, normalize=normalize,
-                        batch_size=self.batch_size, min_shingles=expected_num_of_lines_per_form*num_forms_per_author)
+                        batch_size=self.batch_size, min_fragments=0, train_pct=train_pct, test_pct=test_pct, val_pct=val_pct)
         self.m = m
         self.default_mode = default_mode
 
@@ -122,14 +126,15 @@ def main():
                       type=int, help="Number of forms per author required")
     parser.add_option("--shingle_dim", dest='shingle_dim', help="Shingle dimensions, comma separated i.e. 120,120")
     parser.add_option("--batch_size", dest="batch_size", type=int, default=32, help="Iteration Batch Size")
-    parser.add_option("--from_form", dest="use_form", action='store_true', default=False)
+    parser.add_option("--log_level", dest="log_level", type=int, default=logging.WARNING)
     (options, args) = parser.parse_args()
 
+    logging.basicConfig(level=options.log_level)
     shingle_dim = map(int, options.shingle_dim.split(','))
 
     iam_m = IAM_MiniBatcher(options.filename, options.num_authors, options.num_forms_per_author,
-                            shingle_dim=shingle_dim, use_form=options.use_form,
-                            default_mode=MiniBatcher.TRAIN, batch_size=options.batch_size)
+                            shingle_dim=shingle_dim, default_mode=MiniBatcher.TRAIN,
+                            batch_size=options.batch_size)
 
     num_batches = 10
     start_time = time.time()
@@ -137,6 +142,7 @@ def main():
         z = iam_m.get_train_batch()
 
     print 'Completed %d batches in: '%num_batches,time.time() - start_time
-    print z[0].shape
+    print 'Batch shape: ', z[0].shape
+    print 'Number of unique authors in first batch: {}'.format(len(set(z[1])))
 if __name__ == "__main__":
     main()
