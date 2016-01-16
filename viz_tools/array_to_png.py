@@ -2,7 +2,7 @@
 
 import io
 # !pip install pypng
-import png
+#import png
 import numpy as np
 import PIL
 from IPython.display import Image, display
@@ -17,8 +17,9 @@ def get_png_from_array(data):
     example, IPython.display.Image
     """
     buf = io.BytesIO()
-    w = png.Writer(*data.shape[::-1], greyscale=True)
-    w.write(buf, data)
+    im = PIL.Image.fromarray(data)
+    im.convert('L')
+    im.save(buf, format='png')
     return buf.getvalue()
 
 def display_img_array(ima):
