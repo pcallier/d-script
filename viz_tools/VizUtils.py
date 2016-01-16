@@ -95,10 +95,11 @@ def iam_get_text_block(form_id, data_root):
                 line_line_chopped = eight_space_re.sub('\\1', line_line).strip()
                 try:
                     line_id, errcode, graylvl, num_components, left, top, width, height = line_line_chopped.split(' ')
+                    left = int(left); top = int(top); width = int(width); height=int(height)
                 except ValueError:
                     # malformed line
-                    pass
-                left = int(left); top = int(top); width = int(width); height=int(height)
+                    continue
+                
                 if form_top is None: # or top < form_top_left[1]:
                     form_top = top
                     form_left = left
