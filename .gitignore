@@ -58,3 +58,7 @@ target/
 
 # Ignore IPython notebook checkpoints
 .ipynb_checkpoints
+
+# Ignore HDF5 files
+*.hdf5
+*.npy
