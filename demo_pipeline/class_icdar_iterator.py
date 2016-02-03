@@ -164,10 +164,10 @@ class ICDARFeaturizer:
                 variance_rankings = np.argsort(-variances)
                 all_features = all_features[variance_rankings[:num_shingles], :]
                 
-                assert(all_features.shape[0] == num_shingles, 
+                assert all_features.shape[0] == num_shingles, \
                     "Wanted {0} shingles, got {1}.\n{2}".format(num_shingles,
                                                                 all_features.shape[0],
-                                                                variance_rankings[:30]))
+                                                                variance_rankings[:30])
             # do mean aggregation if required    
             if return_mean:
                 all_features=np.mean(all_features, axis=0)

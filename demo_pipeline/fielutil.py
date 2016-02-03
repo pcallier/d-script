@@ -14,7 +14,6 @@ from keras.layers.convolutional import Convolution2D, MaxPooling2D
 from keras.optimizers import SGD
 from keras.utils.np_utils import to_categorical
 from keras.layers.normalization import BatchNormalization as BN
-
 import matplotlib.pylab as plt
 import sys
 sys.path.append('..')
@@ -22,7 +21,7 @@ sys.path.append('..')
 from data_iters.minibatcher import MiniBatcher
 # from data_iters.hdf5_iterator import IAM_MiniBatcher
 from class_icdar_iterator import *
-
+import stn
 
 from PIL import Image
 def randangle(batch):
@@ -152,7 +151,7 @@ def tfdnet( hdf5file, layer='softmax', compile=False ):
     return model
 
     
-def verbatimnet( layer='softmax', compiling=False ):
+def verbatimnet( layer='softmax', compiling=False, lr=0.001 ):
     
     layers = ['conv1', 'conv2', 'conv3', 'conv4', 'conv5',
               'fc6', 'fc7', 'softmax']
@@ -200,6 +199,66 @@ def verbatimnet( layer='softmax', compiling=False ):
     return model
 
 
+def verbatimnet_stn( layer='softmax', compiling=False, input_shape=(1, 56, 56), downsample_factor=1, lr=0.001 ):
+    """
+    Fiel's net (verbatim) with one stn up front, boring MLP
+    for localization
+    """
+    layers = ['stn', 'conv1', 'conv2', 'conv3', 'conv4', 'conv5',
+              'fc6', 'fc7', 'softmax']
+    
+    model = Sequential()
+    
+    # add one STN
+    if layer in layers[-9:]:
+        locnet = Sequential()
+        locnet.add(Flatten(input_shape=input_shape))
+        locnet.add(Dense(1024))
+        locnet.add(Dense(256))
+        
+        stn_module = stn.SpatialTransformer(locnet, input_shape=input_shape, downsample_factor=downsample_factor)
+        model.add(stn_module)
+
+    model.add(Convolution2D(96, 11, 11,
+                            border_mode='valid', subsample=(4,4),
+                            input_shape=(1, 56, 56),
+                            activation='relu'))
+    model.add(MaxPooling2D(pool_size=(2,2)))
+      
+    if layer in layers[-7:]:
+        model.add(Convolution2D(96, 5, 5, activation='relu', border_mode='same'))
+        model.add(MaxPooling2D(pool_size=(2,2)))
+
+    if layer in layers[-6:]:
+        model.add(Convolution2D(256, 3, 3, border_mode = 'same', activation='relu'))
+
+    if layer in layers[-5:]:
+        model.add(Convolution2D(256, 3, 3, border_mode = 'same', activation='relu'))
+
+    if layer in layers[-4:]:
+        model.add(Convolution2D(256, 3, 3, border_mode = 'same', activation='relu'))
+        model.add(MaxPooling2D(pool_size=(3, 3)))
+        model.add(Dropout(0.25))
+    
+    if layer in layers[-3:]:
+        model.add(Flatten())
+        model.add(Dense(4096, activation='relu'))
+
+    if layer in layers[-2:]:
+        model.add(Dense(4096, activation='relu'))
+        model.add(Dropout(0.25))
+    
+    if layer in layers[-1]:
+        model.add(Dense(num_authors))
+        model.add(Activation('softmax'))
+    
+    if compiling:
+        print "Compiling model"
+        sgd = SGD(lr=lr, decay=1e-6, momentum=0.9, nesterov=True)
+        model.compile(loss='categorical_crossentropy', optimizer=sgd)
+        print "Finished compilation"
+    
+    return model
 
 def loadparams( model, hdf5file ):
     
