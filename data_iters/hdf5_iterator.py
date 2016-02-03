@@ -113,9 +113,16 @@ class Hdf5MiniBatcher:
             
         # Pull shingle from the line, until it satisfies constraints
         for i in range(max_tries):
+            
+            ## Pat and Karl are hacking!
+            if not original_fragment.shape == 2:
+                original_fragment = np.zeros((shingle_dim))
+                
             (height, width) = original_fragment.shape
             shingle_height, shingle_width = shingle_dim
 
+            width=max(width, 1)
+            height=max(height,1)
             x_sample = rng.randint(0, width)
             y_sample = rng.randint(0, height)
             
@@ -240,6 +247,9 @@ class Hdf5MiniBatcher:
         return self.get_batch(num_items, MiniBatcher.TEST)
 
     def get_train_batch(self, num_items=None):
+        logger = logging.getLogger(__name__)
+        logger.debug("Number of items to get: {0}".format(num_items))
+        logger.debug("Minibatcher.TRAIN: {0}".format(MiniBatcher.TRAIN))
         if num_items is None:
             num_items = self.batch_size
         return self.get_batch(num_items, MiniBatcher.TRAIN)
