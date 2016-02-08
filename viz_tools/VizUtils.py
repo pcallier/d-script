@@ -120,3 +120,21 @@ def readtif(imname):
 def readcolim(imname):
     im = Image.open(imname)
     return numpy.array( im.getdata(), numpy.uint8).reshape(im.size[1], im.size[0],3)
+
+def plot_shingles(batch, nr_to_plot, nr_per_row=3):
+    nr_rows = nr_to_plot // nr_per_row + min(nr_to_plot % nr_per_row, 1)
+    for row_i in range(nr_rows):
+        for col_i in range(nr_per_row):
+            subplot_cell_id = row_i * nr_per_row + col_i + 1
+            # handle partial final row case
+            if subplot_cell_id > nr_to_plot:
+                break
+            
+            batch_img = batch[subplot_cell_id-1]
+            
+            plt.subplot(nr_rows, nr_per_row, subplot_cell_id)
+            plt.imshow(-batch_img, cmap="gray")
+            plt.gca().axes.get_xaxis().set_ticks([])
+            plt.gca().axes.get_yaxis().set_ticks([])
+            
+

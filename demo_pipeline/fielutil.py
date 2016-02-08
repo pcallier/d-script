@@ -199,7 +199,8 @@ def verbatimnet( layer='softmax', compiling=False, lr=0.001 ):
     return model
 
 
-def verbatimnet_stn( layer='softmax', compiling=False, input_shape=(1, 56, 56), downsample_factor=1, lr=0.001 ):
+def verbatimnet_stn( layer='softmax', compiling=False, input_shape=(1, 56, 56), downsample_factor=1, lr=0.001,
+                     scale_l2=0.00, translate_l2=0.0, off_diag_l1=0.0):
     """
     Fiel's net (verbatim) with one stn up front, boring MLP
     for localization
@@ -211,13 +212,41 @@ def verbatimnet_stn( layer='softmax', compiling=False, input_shape=(1, 56, 56), 
     
     # add one STN
     if layer in layers[-9:]:
-        locnet = Sequential()
-        locnet.add(Flatten(input_shape=input_shape))
-        locnet.add(Dense(1024))
-        locnet.add(Dense(256))
+        theta_regularizer = stn.attention.TransformRegularizer(scale_l2=scale_l2, 
+                                                               translate_l2=translate_l2,
+                                                               off_diag_l1=off_diag_l1)
+        #theta_regularizer=None
         
-        stn_module = stn.SpatialTransformer(locnet, input_shape=input_shape, downsample_factor=downsample_factor)
+        # from seya's STN demo notebook:
+        dense_size=500
+        b = np.zeros((2, 3), dtype='float32')
+        b[0, 0] = 1.
+        b[1, 1] = 1.
+        b[0, 2] = 0.
+        b[1, 2] = 0.
+        W = np.zeros((dense_size, 6), dtype='float32')
+        weights = [W, b.flatten()]
+        
+        locnet = Sequential()
+        locnet.add(Convolution2D(100, 3, 3, input_shape=input_shape))
+        locnet.add(MaxPooling2D(pool_size=(4,4)))
+        locnet.add(Convolution2D(300, 3, 3))
+        locnet.add(Activation('relu'))
+        locnet.add(MaxPooling2D(pool_size=(2,2)))
+        locnet.add(Convolution2D(600, 3, 3))
+        locnet.add(Activation('relu'))
+        
+        locnet.add(Flatten(input_shape=input_shape))
+        locnet.add(Dense(dense_size))
+        locnet.add(Activation('relu'))
+        locnet.add(Dense(6, weights=weights, activity_regularizer=theta_regularizer))
+                
+        stn_module = stn.SpatialTransformer(locnet, 
+                                            input_shape=input_shape, 
+                                            downsample_factor=downsample_factor)
         model.add(stn_module)
+        
+        
 
     model.add(Convolution2D(96, 11, 11,
                             border_mode='valid', subsample=(4,4),

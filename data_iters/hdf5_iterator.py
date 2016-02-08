@@ -115,7 +115,7 @@ class Hdf5MiniBatcher:
         for i in range(max_tries):
             
             ## Pat and Karl are hacking!
-            if not original_fragment.shape == 2:
+            if not len(original_fragment.shape) == 2:
                 original_fragment = np.zeros((shingle_dim))
                 
             (height, width) = original_fragment.shape

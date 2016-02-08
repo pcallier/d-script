@@ -8,7 +8,9 @@ RUN apt-get update && apt-get install -y \
 
 # Upgrade six
 RUN pip install --upgrade six && \
-    cd /root && git clone https://github.com/fchollet/keras.git && cd keras && \
+    cd /root && git clone https://github.com/fchollet/keras.git && \
+    cd keras && \
+    git checkout tags/0.3.1 && \
     python setup.py install && \
     sudo apt-get -y install vim
 

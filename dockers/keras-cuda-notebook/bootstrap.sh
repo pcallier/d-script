@@ -1,3 +1,3 @@
 #!/bin/bash
 
-ipython notebook --ip='*' --no-browser
+jupyter notebook --ip='*' --no-browser
